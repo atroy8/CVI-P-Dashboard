@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Community Gun Violence: An Interactive Public Health Policy Dashboard</title>
+    <meta name="description" content="An interactive, evidence-based React dashboard on community gun violence in the United States — updated with 2023 finalized and 2024 provisional CDC data, disparities, socio-ecological determinants, interventions, and policy solutions, framed through an equity lens.">
+
+    <!-- Styling / charts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { darkMode: 'class' };</script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- React (via CDN so this stays a single, double-clickable file) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Application Structure Plan: A React single-page dashboard with an animated + photographic hero, sticky side-navigation, and scroll-progress bar. Structure follows the five Objectives of Epidemiology. Real photography (Unsplash) and Font Awesome iconography replace emoji/SVG-only visuals; every socio-ecological (SEM) risk level is now individually cited, and Objective 2 opens with an equity-framed, well-cited context paragraph. -->
+    <!-- Data currency: 2023 figures are CDC-finalized; 2024 figures are CDC provisional (per Pew Research, Apr 2026 and The Trace, 2025). Photographs are royalty-free (Unsplash license) with graceful gradient fallbacks. -->
+    <style>
+        :root{
+            --bg-1:#F8F9FA; --bg-2:#E9ECEF; --text:#2D3748; --muted:#4A5568;
+            --card:rgba(255,255,255,0.95); --card-border:rgba(255,255,255,0.4);
+            --accent:#E53E3E; --accent-dark:#C53030; --ink:#1A202C; --grid:#E2E8F0;
+        }
+        html.dark{
+            --bg-1:#0F141B; --bg-2:#1A202C; --text:#E2E8F0; --muted:#A0AEC0;
+            --card:rgba(26,32,44,0.92); --card-border:rgba(255,255,255,0.08);
+            --accent:#FC8181; --accent-dark:#F56565; --ink:#E2E8F0; --grid:#2D3748;
+        }
+        body{
+            background:linear-gradient(135deg,var(--bg-1) 0%,var(--bg-2) 100%);
+            color:var(--text); font-family:'Inter',sans-serif; line-height:1.7;
+            transition:background .4s ease,color .4s ease;
+        }
+        h1,h2,h3,h4{ color:var(--text); }
+        .muted{ color:var(--muted); }
+        /* Loading splash */
+        #boot{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:linear-gradient(135deg,#1A202C,#742A2A);color:#fff;z-index:200;font-family:'Inter',sans-serif}
+        #boot .spin{width:44px;height:44px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        /* Scroll progress */
+        #progress-bar{position:fixed;top:0;left:0;height:4px;width:0%;z-index:60;background:linear-gradient(90deg,#E53E3E,#F6AD55);box-shadow:0 0 10px rgba(229,62,62,.6);transition:width .1s linear}
+        /* Animated + photographic Hero */
+        .hero{position:relative;overflow:hidden;isolation:isolate;background:linear-gradient(120deg,#1A202C,#2D3748 40%,#742A2A 100%);background-size:200% 200%;animation:heroShift 16s ease infinite}
+        @keyframes heroShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+        .hero-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2;opacity:.28;filter:saturate(1.1)}
+        .hero-veil{position:absolute;inset:0;z-index:-1;background:radial-gradient(1200px 500px at 30% 20%,rgba(229,62,62,.25),transparent 60%),linear-gradient(180deg,rgba(15,20,27,.55),rgba(15,20,27,.8))}
+        .hero canvas#sparkline{position:absolute;inset:0;width:100%;height:100%;z-index:-1;opacity:.5}
+        .hero-blob{position:absolute;border-radius:50%;filter:blur(40px);opacity:.35;z-index:-1;mix-blend-mode:screen;animation:float 14s ease-in-out infinite}
+        .blob-a{width:340px;height:340px;background:#E53E3E;top:-80px;left:-60px}
+        .blob-b{width:300px;height:300px;background:#F6AD55;bottom:-100px;right:-40px;animation-delay:-5s}
+        .blob-c{width:240px;height:240px;background:#4299E1;top:30%;right:25%;animation-delay:-9s}
+        @keyframes float{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-25px) scale(1.08)}66%{transform:translate(-20px,20px) scale(.95)}}
+        .hero-title, .hero-title span{color:#fff}
+        .hero-title span{display:inline-block;opacity:0;transform:translateY(20px);animation:rise .7s forwards}
+        @keyframes rise{to{opacity:1;transform:translateY(0)}}
+        .pulse-dot{width:10px;height:10px;border-radius:50%;background:#68D391;box-shadow:0 0 0 rgba(104,211,145,.7);animation:pulse 2s infinite}
+        @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(104,211,145,.7)}70%{box-shadow:0 0 0 12px rgba(104,211,145,0)}100%{box-shadow:0 0 0 0 rgba(104,211,145,0)}}
+        .scroll-cue{animation:bob 1.8s ease-in-out infinite}
+        @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(8px)}}
+        /* Reveal on scroll */
+        .reveal{opacity:0;transform:translateY(28px);transition:opacity .6s ease,transform .6s ease}
+        .reveal.visible{opacity:1;transform:none}
+        .chart-container{position:relative;width:100%;max-width:600px;margin:auto;height:350px;max-height:400px}
+        .nav-link{transition:all .3s cubic-bezier(.4,0,.2,1);border-radius:8px;margin:2px 0;color:var(--muted);cursor:pointer}
+        .nav-link.active{color:#fff;background:linear-gradient(135deg,#E53E3E,#C53030);font-weight:600;box-shadow:0 4px 12px rgba(229,62,62,.3);transform:translateX(4px)}
+        .nav-link:hover{color:var(--accent);background-color:rgba(229,62,62,.08);transform:translateX(2px)}
+        .tab-button.active{background:linear-gradient(135deg,#2D3748,#1A202C);color:#fff;box-shadow:0 2px 8px rgba(45,55,72,.3)}
+        .tab-button{background:linear-gradient(135deg,#E2E8F0,#CBD5E0);color:#2D3748;transition:all .3s ease;cursor:pointer}
+        .tab-button:hover{background:linear-gradient(135deg,#CBD5E0,#A0AEC0);transform:translateY(-1px)}
+        .accordion-content{overflow:hidden;transition:max-height .4s cubic-bezier(.4,0,.2,1)}
+        .citation{font-size:.75em;vertical-align:super;color:var(--accent);text-decoration:none;margin-left:2px;font-weight:600;padding:1px 3px;border-radius:3px;background:rgba(229,62,62,.12);transition:all .2s ease}
+        .citation:hover{background:rgba(229,62,62,.25);transform:scale(1.1)}
+        .causal-diagram{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}
+        .causal-step{background:linear-gradient(135deg,#FFFFFF,#F7FAFC);border:2px solid #E2E8F0;padding:16px;border-radius:12px;font-size:.9rem;font-weight:600;width:100%;max-width:90%;box-shadow:0 2px 8px rgba(0,0,0,.1);transition:transform .2s ease;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100px}
+        html.dark .causal-step{background:linear-gradient(135deg,#1A202C,#2D3748);border-color:#2D3748;color:var(--text)}
+        .causal-step:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.15);border-color:#E53E3E}
+        .causal-arrow{font-size:2rem;color:var(--accent);margin:0;text-shadow:0 2px 4px rgba(229,62,62,.3)}
+        .section-card{background:var(--card);backdrop-filter:blur(10px);border:1px solid var(--card-border);box-shadow:0 8px 32px rgba(0,0,0,.1);transition:all .3s ease}
+        .section-card:hover{box-shadow:0 10px 40px rgba(0,0,0,.15)}
+        .kpi-card{background:linear-gradient(135deg,var(--card),var(--card));border:2px solid var(--grid);transition:all .3s ease}
+        .kpi-card:hover{transform:translateY(-4px);box-shadow:0 8px 24px rgba(0,0,0,.12);border-color:var(--accent-dark)}
+        .tinted{border:1px solid var(--grid)}
+        html.dark .tinted{background:rgba(255,255,255,.04)!important;border-color:#2D3748}
+        html.dark .tinted h4, html.dark .tinted p, html.dark .tinted li, html.dark .tinted div, html.dark .tinted a{color:var(--text)!important}
+        .toggle-btn{transition:all .25s ease;border:1px solid var(--grid);cursor:pointer}
+        .toggle-btn.active{background:linear-gradient(135deg,#E53E3E,#C53030);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(229,62,62,.3)}
+        #backToTop{position:fixed;bottom:24px;right:24px;z-index:50;opacity:0;pointer-events:none;transition:opacity .3s ease,transform .3s ease;transform:translateY(10px);cursor:pointer}
+        #backToTop.show{opacity:1;pointer-events:auto;transform:translateY(0)}
+        .credit{font-size:.7rem;color:var(--muted)}
+        .tier-badge{display:inline-block;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:9999px;margin-left:8px;vertical-align:middle;letter-spacing:.02em}
+        /* Photography */
+        .photo-wrap{position:relative;overflow:hidden;border-radius:1rem}
+        .photo{display:block;width:100%;height:100%;object-fit:cover;transition:transform .6s ease}
+        .photo-wrap:hover .photo{transform:scale(1.05)}
+        .photo-cap{position:absolute;left:0;right:0;bottom:0;padding:14px 16px;font-size:.72rem;color:#fff;background:linear-gradient(0deg,rgba(0,0,0,.72),transparent)}
+        .fallback-grad{background:linear-gradient(135deg,#742A2A,#1A202C);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.5);font-size:2rem}
+        .level-icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;color:#fff;flex-shrink:0}
+        @media (min-width:768px){
+            .causal-diagram{flex-direction:row;justify-content:space-around;align-items:stretch}
+            .causal-arrow{transform:rotate(0deg)!important;margin:0 10px}
+            .causal-step{max-width:22%;min-height:120px}
+        }
+        @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+    </style>
+</head>
+<body>
+    <div id="boot"><div class="spin"></div><div>Building the dashboard…</div></div>
+    <div id="progress-bar"></div>
+    <div id="root"></div>
+
+    <script type="text/react-src" id="app-src">
+    const {useState, useEffect, useRef, useCallback} = React;
+
+    /* ============================================================
+       DATA
+       ============================================================ */
+    const IMG = {
+        hero:      'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=1600&q=80', // diverse community gathering
+        unity:     'https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=1000&q=80', // hands together
+        unity2:    'https://images.unsplash.com/photo-1531206715517-5c0ba140b2b8?w=1000&q=80',  // hands circle
+        counsel:   'https://images.unsplash.com/photo-1573497491208-6b1acb260507?w=1000&q=80',  // two people talking
+        hospital:  'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?w=1000&q=80',  // hospital emergency exterior
+        trauma:    'https://images.unsplash.com/photo-1504813184591-01572f98c85f?w=1000&q=80',  // trauma / OR team
+        planning:  'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=1000&q=80',  // data / planning
+        meeting:   'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=1000&q=80'   // community meeting
+    };
+
+    const REFERENCES = [
+        'Centers for Disease Control and Prevention. WISQARS Fatal Injury Reports, 2023 (finalized). Atlanta, GA: CDC; 2025. <a class="underline" href="https://wisqars.cdc.gov" target="_blank" rel="noopener">wisqars.cdc.gov</a>. See also Johns Hopkins Center for Gun Violence Solutions. Gun Violence in the United States 2023. June 2025.',
+        'Pew Research Center. What the data says about gun deaths in the U.S. April 28, 2026 (CDC provisional 2024 data: ~44,447 total; 15,364 homicides; 27,593 suicides). <a class="underline" href="https://www.pewresearch.org/short-reads/2026/04/28/what-the-data-says-about-gun-deaths-in-the-us/" target="_blank" rel="noopener">pewresearch.org</a>.',
+        'Johns Hopkins Center for Gun Violence Solutions. A Year in Review: 2023 Gun Deaths in the U.S. (young Black males 15–34 face firearm-homicide rates ~24× their white peers; Black Americans overall ~13×; ~1.1 million years of potential life lost before age 65). 2025. <a class="underline" href="https://publichealth.jhu.edu/center-for-gun-violence-solutions" target="_blank" rel="noopener">publichealth.jhu.edu</a>.',
+        'Bailey ZD, Krieger N, Agénor M, Graves J, Linos N, Bassett MT. Structural racism and health inequities in the USA: evidence and interventions. Lancet. 2017;389(10077):1453-1463.',
+        'Zatzick D, Russo J, Lord SP, et al. Collaborative care intervention targeting violence-risk behaviors, substance use, and PTSD/depressive symptoms in injured adolescents: a randomized clinical trial. JAMA Pediatr. 2014;168(6):532-539.',
+        'Heller SB. Summer jobs reduce violence among disadvantaged youth. Science. 2014;346(6214):1219-1223.',
+        'Purtle J, Dicker R, Cooper C, et al. Hospital-based violence intervention programs save lives and money. J Trauma Acute Care Surg. 2013;75(2):331-333.',
+        'Massey DS, Denton NA. American Apartheid: Segregation and the Making of the Underclass. Cambridge, MA: Harvard University Press; 1993.',
+        'Federal Bureau of Investigation. National Incident-Based Reporting System (NIBRS) User Manual. 2022. <a class="underline" href="https://www.fbi.gov/services/cjis/ucr/nibrs" target="_blank" rel="noopener">fbi.gov/services/cjis/ucr/nibrs</a>.',
+        'Branas CC, Kondo MC, Murphy SM, et al. Urban blight remediation as a cost-beneficial solution to firearm violence. Am J Public Health. 2016;106(12):2158-2164.',
+        'The Trace. Newest CDC data confirm gun deaths fell in 2024, but remain higher than before the pandemic. 2025. <a class="underline" href="https://www.thetrace.org/2025/07/gun-deaths-suicide-homicide-data-cdc/" target="_blank" rel="noopener">thetrace.org</a>.',
+        'Everytown for Gun Safety Support Fund. The Economic Cost of Gun Violence (~$557 billion annually). November 2024. <a class="underline" href="https://everytownresearch.org/report/the-economic-cost-of-gun-violence/" target="_blank" rel="noopener">everytownresearch.org</a>.',
+        'Centers for Disease Control and Prevention. WISQARS Nonfatal Injury Reports. 2023. <a class="underline" href="https://wisqars.cdc.gov" target="_blank" rel="noopener">wisqars.cdc.gov</a>.',
+        'Wintemute GJ. The epidemiology of firearm violence in the twenty-first century United States. Annu Rev Public Health. 2015;36:5-19.',
+        'Agency for Healthcare Research and Quality. Healthcare Cost and Utilization Project (HCUP). 2023. <a class="underline" href="https://www.hcup-us.ahrq.gov" target="_blank" rel="noopener">hcup-us.ahrq.gov</a>.',
+        'GBD 2019 Diseases and Injuries Collaborators. Global burden of 369 diseases and injuries in 204 countries and territories, 1990–2019. Lancet. 2020;396(10258):1204-1222.',
+        'Sims DW, Bivins BA, Obeid FN, et al. Urban trauma: a chronic recurrent disease. J Trauma. 1989;29(7):940-946.',
+        'Butts JA, Roman CG, Bostwick L, Porter JR. Cure Violence: a public health model to reduce gun violence. Annu Rev Public Health. 2015;36:39-53.',
+        'Kaiser Family Foundation. Child and Adolescent Firearm Deaths: National Trends and Variation. 2024 (firearms remain the leading cause of death among U.S. children and teens). <a class="underline" href="https://www.kff.org" target="_blank" rel="noopener">kff.org</a>.',
+        'Juillard C, Cooperman L, Allen I, et al. A decade of hospital-based violence intervention: benefits and shortcomings. J Trauma Acute Care Surg. 2016;81(6):1156-1161.',
+        'Bonne S, Violano P, Duncan TK, et al. Trauma-informed care and violence-prevention education for clinicians. J Trauma Acute Care Surg. 2022;93(4):531-537.',
+        'Papachristos AV, Wildeman C. Network exposure and homicide victimization in an African American community. Am J Public Health. 2014;104(1):143-150.',
+        'Cunningham RM, Carter PM, Ranney M, et al. Violent reinjury and mortality among youth seeking emergency department care for assault-related injury. JAMA Pediatr. 2015;169(1):63-70.',
+        'Kravitz-Wirtz N, Bruns A, Aubel AJ, Zhang X, Buggs SA. Inequities in community exposure to deadly gun violence by race/ethnicity, poverty, and neighborhood disadvantage among youth in large US cities. J Urban Health. 2022;99(4):610-625.',
+        'Siegel M, Ross CS, King C 3rd. The relationship between gun ownership and firearm homicide rates in the United States, 1981-2010. Am J Public Health. 2013;103(11):2098-2105.',
+        'Crandall M, Sharp D, Unger E, et al. Trauma deserts: distance from a trauma center, transport times, and mortality from gunshot wounds in Chicago. Am J Public Health. 2013;103(6):1103-1109.',
+        'South EC, Hohl BC, Kondo MC, MacDonald JM, Branas CC. Effect of greening vacant land on mental health of community-dwelling adults: a cluster randomized trial. JAMA Netw Open. 2018;1(3):e180298.',
+        'Basch CE. Aggression and violence and the achievement gap among urban minority youth. J Sch Health. 2011;81(10):619-625.',
+        'Bingenheimer JB, Brennan RT, Earls FJ. Firearm violence exposure and serious violent behavior. Science. 2005;308(5726):1323-1326.'
+    ];
+
+    // Objective 1.3 — Socio-Ecological Model risk levels, now each individually cited
+    const SEM_LEVELS = [
+        { name:'Individual', icon:'fa-user', color:'#E53E3E',
+          blurb:'Personal history and biology that shape an individual’s risk.',
+          items:[
+            {k:'Prior Violence Exposure', v:'A previous violent injury raises the risk of violent reinjury roughly 5–10× within two years.', c:[23,17]},
+            {k:'Age / Sex', v:'Risk peaks at ages 15–34 and is overwhelmingly male; adolescents show the highest recurrence.', c:[3]},
+            {k:'Substance Use', v:'Alcohol or other drugs are involved in a large share of assault-injury encounters, compounding reinjury risk.', c:[23,14]}
+        ]},
+        { name:'Relationship', icon:'fa-people-group', color:'#DD6B20',
+          blurb:'Peers, family, and close social ties that transmit — or buffer — risk.',
+          items:[
+            {k:'Peer & Social Networks', v:'Gunshot victimization spreads through social networks; each network tie to a prior victim measurably raises risk.', c:[22]},
+            {k:'Family Structure', v:'Exposure to family violence, instability, and low supervision predicts later serious violent behavior.', c:[29]},
+            {k:'School Connection', v:'School disengagement, suspension, and the achievement gap forecast future violence involvement.', c:[28]}
+        ]},
+        { name:'Community', icon:'fa-city', color:'#38A169',
+          blurb:'Neighborhood conditions and the built environment where violence concentrates.',
+          items:[
+            {k:'Neighborhood Disinvestment & Blight', v:'Vacant, blighted lots and disinvestment elevate risk; remediating them is a cost-beneficial way to cut firearm violence.', c:[10]},
+            {k:'Housing Instability & Green Space', v:'Overcrowding and frequent moves raise stress and conflict, while greening vacant land improves mental health and safety.', c:[27,8]},
+            {k:'Firearm Availability', v:'Higher household gun ownership at the community level is associated with significantly higher firearm-homicide rates.', c:[25]}
+        ]},
+        { name:'Societal / Structural', icon:'fa-landmark', color:'#805AD5',
+          blurb:'Laws, policies, and structural racism that stratify opportunity and exposure.',
+          items:[
+            {k:'Structural Racism & Poverty', v:'Concentrated poverty and structural racism drive deeply unequal exposure to deadly gun violence across race and place.', c:[24,4]},
+            {k:'Educational Inequity', v:'Under-resourced schools widen the achievement gap and constrain future opportunity, feeding the violence cycle.', c:[28]},
+            {k:'Employment Discrimination', v:'Blocked access to quality jobs perpetuates poverty; conversely, employment programs reduce violent involvement.', c:[4,6]}
+        ]},
+        { name:'Health System', icon:'fa-briefcase-medical', color:'#3182CE',
+          blurb:'Access to trauma care, coverage, and behavioral health that shape recovery.',
+          items:[
+            {k:'Trauma Deserts', v:'Greater distance from a trauma center (“trauma deserts”) is associated with higher mortality from gunshot wounds.', c:[26]},
+            {k:'Lack of Insurance', v:'Financial barriers block the long-term therapy and case management that interrupt the cycle of violence.', c:[7]}
+        ]}
+    ];
+
+    const KPIS = [
+        {value:44447, format:'comma', label:'Total Gun Deaths (2024, prov.)', c:2},
+        {value:27593, format:'comma', label:'Firearm Suicides — record (2024)', c:2},
+        {value:24, suffix:'×', label:'Homicide rate, young Black vs. white males', c:3},
+        {value:557, prefix:'$', suffix:'B', label:'Annual Economic Cost', c:12}
+    ];
+
+    const NAV = [
+        {id:'summary', icon:'fa-clipboard-list', label:'Executive Summary', short:'Executive Summary'},
+        {id:'etiology', icon:'fa-magnifying-glass', label:'1. Definition & Root Causes', short:'1. Root Causes'},
+        {id:'burden', icon:'fa-chart-column', label:'2. Burden & Distribution', short:'2. Burden'},
+        {id:'cycle', icon:'fa-arrows-rotate', label:'3. Natural History', short:'3. Natural History'},
+        {id:'interventions', icon:'fa-shield-halved', label:'4. Prevention', short:'4. Prevention'},
+        {id:'policy', icon:'fa-landmark-dome', label:'5. Policy Solutions', short:'5. Policy'},
+        {id:'reflection', icon:'fa-lightbulb', label:'Reflection & Future Research', short:'Reflection'},
+        {id:'methods', icon:'fa-flask', label:'Data & Methods', short:'Methods'},
+        {id:'references', icon:'fa-book', label:'References', short:'References'}
+    ];
+
+    /* ============================================================
+       SMALL COMPONENTS
+       ============================================================ */
+    const Icon = ({name, className='', style}) => <i className={`fa-solid ${name} ${className}`} style={style} aria-hidden="true"></i>;
+
+    function Cite({n}){
+        const arr = Array.isArray(n) ? n : [n];
+        return <>{arr.map(x => <a key={x} href={'#ref'+x} className="citation">[{x}]</a>)}</>;
+    }
+
+    function Photo({src, alt, caption, className='', imgClass='', ratio='56.25%'}){
+        const [ok, setOk] = useState(true);
+        return (
+            <div className={'photo-wrap shadow-md '+className} style={{paddingBottom: caption? undefined : undefined}}>
+                <div style={{position:'relative', width:'100%', paddingBottom:ratio}}>
+                    {ok
+                        ? <img src={src} alt={alt} loading="lazy" onError={()=>setOk(false)}
+                               className={'photo '+imgClass} style={{position:'absolute',inset:0}}/>
+                        : <div className="photo fallback-grad" style={{position:'absolute',inset:0}} role="img" aria-label={alt}><Icon name="fa-image"/></div>}
+                    {caption && <div className="photo-cap">{caption}</div>}
+                </div>
+            </div>
+        );
+    }
+
+    function CountUp({target, format, prefix='', suffix=''}){
+        const ref = useRef(null);
+        useEffect(()=>{
+            const el = ref.current; if(!el) return;
+            let raf;
+            const obs = new IntersectionObserver((ents)=>{
+                ents.forEach(en=>{
+                    if(en.isIntersecting){
+                        const dur=1400, start=performance.now();
+                        const step=(now)=>{
+                            const p=Math.min((now-start)/dur,1);
+                            const eased=1-Math.pow(1-p,3);
+                            const val=Math.round(target*eased);
+                            const txt = format==='comma' ? val.toLocaleString() : String(val);
+                            el.textContent = prefix+txt+suffix;
+                            if(p<1) raf=requestAnimationFrame(step);
+                        };
+                        raf=requestAnimationFrame(step);
+                        obs.unobserve(el);
+                    }
+                });
+            },{threshold:0.5});
+            obs.observe(el);
+            return ()=>{ obs.disconnect(); if(raf) cancelAnimationFrame(raf); };
+        },[target]);
+        return <span ref={ref}>0</span>;
+    }
+
+    function Reveal({children, className='', id}){
+        const ref = useRef(null);
+        useEffect(()=>{
+            const el=ref.current; if(!el) return;
+            const obs=new IntersectionObserver((ents)=>{
+                ents.forEach(en=>{ if(en.isIntersecting){ en.target.classList.add('visible'); obs.unobserve(en.target);} });
+            },{threshold:0.08});
+            obs.observe(el);
+            return ()=>obs.disconnect();
+        },[]);
+        return <section id={id} ref={ref} className={'reveal '+className}>{children}</section>;
+    }
+
+    /* ============================================================
+       CHART HELPERS
+       ============================================================ */
+    const gridColor = (dark)=> dark ? '#2D3748' : '#E2E8F0';
+    const tickColor = (dark)=> dark ? '#A0AEC0' : '#4A5568';
+
+    function useChart(factory, deps){
+        const canvasRef = useRef(null);
+        const chartRef = useRef(null);
+        useEffect(()=>{
+            if(!canvasRef.current || !window.Chart) return;
+            const c = factory(canvasRef.current.getContext('2d'));
+            chartRef.current = c;
+            return ()=>{ c && c.destroy(); };
+        }, deps); // eslint-disable-line
+        return [canvasRef, chartRef];
+    }
+
+    function TrendChart({dark}){
+        const [visible, setVisible] = useState([true,true,true]);
+        const visibleRef = useRef(visible); visibleRef.current = visible;
+        const [canvasRef, chartRef] = useChart((ctx)=> new Chart(ctx,{
+            type:'line',
+            data:{ labels:['2019','2020','2021','2022','2023','2024*'],
+                datasets:[
+                    {label:'Total Gun Deaths', data:[39707,45222,48830,48204,46728,44447], hidden:!visibleRef.current[0], borderColor:'#E53E3E', backgroundColor:'rgba(229,62,62,.12)', fill:true, tension:.35, borderWidth:3, pointRadius:4},
+                    {label:'Firearm Suicides', data:[23941,24292,26328,27032,27300,27593], hidden:!visibleRef.current[1], borderColor:'#3182CE', backgroundColor:'rgba(49,130,206,.10)', fill:true, tension:.35, borderWidth:3, pointRadius:4},
+                    {label:'Firearm Homicides', data:[14861,19384,20958,19651,17927,15364], hidden:!visibleRef.current[2], borderColor:'#DD6B20', backgroundColor:'rgba(221,107,32,.10)', fill:true, tension:.35, borderWidth:3, pointRadius:4}
+                ]},
+            options:{ maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+                plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(c)=>c.dataset.label+': '+c.parsed.y.toLocaleString()}} },
+                scales:{ y:{beginAtZero:false, grid:{color:gridColor(dark)}, ticks:{color:tickColor(dark), callback:(v)=>(v/1000)+'k'}},
+                         x:{grid:{color:gridColor(dark)}, ticks:{color:tickColor(dark)}} } }
+        }), [dark]);
+        const toggle=(i)=>{
+            const next=[...visible]; next[i]=!next[i]; setVisible(next);
+            const ch=chartRef.current; if(ch){ ch.getDatasetMeta(i).hidden=!next[i]; ch.update(); }
+        };
+        const labels=['Total Deaths','Suicides','Homicides'];
+        return (
+            <>
+                <div className="flex flex-wrap gap-2 mb-6">
+                    {labels.map((l,i)=>(
+                        <button key={l} onClick={()=>toggle(i)} className={'toggle-btn px-4 py-2 rounded-full text-sm font-medium '+(visible[i]?'active':'')}>{l}</button>
+                    ))}
+                </div>
+                <div className="chart-container" style={{maxWidth:'900px',height:'380px',maxHeight:'420px'}}>
+                    <canvas ref={canvasRef}></canvas>
+                </div>
+            </>
+        );
+    }
+
+    const INTENT = {
+        '2024':{labels:['Suicide (62%)','Homicide (35%)','Other (3%)'], data:[27593,15364,1490], pct:'62%', ref:2},
+        '2023':{labels:['Suicide (58%)','Homicide (38%)','Other (4%)'], data:[27300,17927,1501], pct:'58%', ref:1}
+    };
+
+    function IntentChart({dark}){
+        const [year, setYear] = useState('2024');
+        const yearRef = useRef(year); yearRef.current = year;
+        const [canvasRef, chartRef] = useChart((ctx)=>{
+            const d = INTENT[yearRef.current];
+            return new Chart(ctx,{ type:'doughnut',
+                data:{labels:d.labels, datasets:[{data:d.data, backgroundColor:['#E53E3E','#2D3748','#CBD5E0'], borderWidth:3, borderColor: dark?'#1A202C':'#fff'}]},
+                options:{maintainAspectRatio:false, cutout:'65%',
+                    plugins:{legend:{display:true,position:'bottom',labels:{usePointStyle:true,padding:18,color:tickColor(dark)}},
+                        tooltip:{callbacks:{label:(c)=>c.label.replace(/\s*\(\d+%\)/,'')+': '+c.parsed.toLocaleString()}}}}});
+        }, [dark]);
+        const pick=(y)=>{
+            setYear(y);
+            const ch=chartRef.current; if(ch){ ch.data.labels=INTENT[y].labels; ch.data.datasets[0].data=INTENT[y].data; ch.update(); }
+        };
+        const cur=INTENT[year];
+        return (
+            <>
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                    <h3 className="text-2xl font-bold">2.4 Intent Distribution</h3>
+                    <div className="flex gap-2">
+                        {['2024','2023'].map(y=>(
+                            <button key={y} onClick={()=>pick(y)} className={'toggle-btn px-3 py-1.5 rounded-full text-sm font-medium '+(year===y?'active':'')}>{y}</button>
+                        ))}
+                    </div>
+                </div>
+                <div className="chart-container" style={{height:'250px'}}><canvas ref={canvasRef}></canvas></div>
+                <p className="text-sm muted text-center mt-4">In <strong>{year}</strong>, suicides made up about <strong>{cur.pct}</strong> of firearm deaths — underscoring the need for integrated behavioral-health policy<Cite n={cur.ref}/>.</p>
+            </>
+        );
+    }
+
+    function DisparityChart({dark}){
+        const [canvasRef] = useChart((ctx)=> new Chart(ctx,{ type:'bar',
+            data:{labels:['White Non-Hispanic Males','Hispanic Males','Black Non-Hispanic Males'],
+                datasets:[{label:'Firearm-homicide rate per 100,000 (males 15–34)', data:[4.5,17,108],
+                    backgroundColor:['#CBD5E0','#4A5568','#E53E3E'], borderRadius:8, borderWidth:2, borderColor:['#A0AEC0','#2D3748','#C53030']}]},
+            options:{maintainAspectRatio:false, indexAxis:'y', plugins:{legend:{display:false}},
+                scales:{x:{beginAtZero:true, title:{display:true,text:'Homicides per 100,000',font:{weight:'bold'},color:tickColor(dark)}, grid:{color:gridColor(dark)}, ticks:{color:tickColor(dark)}},
+                        y:{grid:{color:gridColor(dark)}, ticks:{color:tickColor(dark)}}}}
+        }), [dark]);
+        return <div className="chart-container"><canvas ref={canvasRef}></canvas></div>;
+    }
+
+    function Donut({val, text, dark}){
+        const [canvasRef] = useChart((ctx)=> new Chart(ctx,{ type:'doughnut',
+            data:{labels:[text,'Remaining'], datasets:[{data:[val,100-val], backgroundColor:['#2D3748','#E2E8F0'], borderWidth:3, borderColor: dark?'#1A202C':'#fff'}]},
+            options:{maintainAspectRatio:false, cutout:'70%', plugins:{legend:{display:false},
+                title:{display:true,text:text,position:'bottom',font:{weight:'bold',size:14},color:tickColor(dark)}}}
+        }), [dark]);
+        return <div className="chart-container"><canvas ref={canvasRef}></canvas></div>;
+    }
+
+    /* ============================================================
+       ACCORDION
+       ============================================================ */
+    function Accordion({title, children, defaultOpen=false}){
+        const [open, setOpen] = useState(defaultOpen);
+        const inner = useRef(null);
+        return (
+            <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-md">
+                <button onClick={()=>setOpen(o=>!o)} className="w-full text-left p-6 font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex justify-between items-center text-lg">
+                    <span>{title}</span>
+                    <span className="transform transition-transform" style={{transform:open?'rotate(180deg)':'rotate(0deg)'}}>▼</span>
+                </button>
+                <div className="accordion-content" style={{maxHeight: open ? (inner.current? inner.current.scrollHeight+'px':'1000px') : '0px'}}>
+                    <div ref={inner} className="p-6 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">{children}</div>
+                </div>
+            </div>
+        );
+    }
+
+    /* ============================================================
+       HERO
+       ============================================================ */
+    function Hero(){
+        const cv = useRef(null);
+        useEffect(()=>{
+            const c=cv.current; if(!c) return; const ctx=c.getContext('2d'); let w,h,t=0,raf;
+            const pts=[39.7,45.2,48.8,48.2,46.7,44.4];
+            const resize=()=>{ w=c.width=c.offsetWidth; h=c.height=c.offsetHeight; };
+            resize(); window.addEventListener('resize',resize);
+            const draw=()=>{
+                ctx.clearRect(0,0,w,h); const max=50,min=35; ctx.beginPath();
+                pts.forEach((p,i)=>{ const x=(i/(pts.length-1))*w; const wob=Math.sin(t/30+i)*4; const y=h-((p-min)/(max-min))*h*0.5 - h*0.25 + wob; i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+                ctx.strokeStyle='rgba(255,255,255,0.35)'; ctx.lineWidth=2; ctx.stroke();
+                ctx.lineTo(w,h); ctx.lineTo(0,h); ctx.closePath();
+                const g=ctx.createLinearGradient(0,0,0,h); g.addColorStop(0,'rgba(229,62,62,0.25)'); g.addColorStop(1,'rgba(229,62,62,0)');
+                ctx.fillStyle=g; ctx.fill(); t++; raf=requestAnimationFrame(draw);
+            };
+            draw();
+            return ()=>{ window.removeEventListener('resize',resize); cancelAnimationFrame(raf); };
+        },[]);
+        return (
+            <header className="hero text-white">
+                <img className="hero-photo" src={IMG.hero} alt="A diverse community gathered together at dusk" onError={(e)=>{e.currentTarget.style.display='none';}}/>
+                <div className="hero-veil"></div>
+                <canvas id="sparkline" ref={cv}></canvas>
+                <div className="hero-blob blob-a"></div><div className="hero-blob blob-b"></div><div className="hero-blob blob-c"></div>
+                <div className="max-w-5xl mx-auto px-6 py-20 md:py-28 text-center relative">
+                    <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur border border-white/20 text-sm">
+                        <span className="pulse-dot"></span> Live data dashboard · Updated June 2026
+                    </div>
+                    <h1 className="hero-title text-4xl md:text-6xl font-black leading-tight mb-6">
+                        <span style={{animationDelay:'.05s'}}>Community</span>{' '}
+                        <span style={{animationDelay:'.20s'}}>Gun</span>{' '}
+                        <span style={{animationDelay:'.35s'}}>Violence</span>
+                    </h1>
+                    <p className="text-lg md:text-xl text-gray-200 max-w-3xl mx-auto mb-8 leading-relaxed">
+                        An interactive public-health dashboard on the data, determinants, and evidence-based solutions to a leading American epidemic — featuring <strong>2023 finalized</strong> and <strong>2024 provisional</strong> CDC data, framed through a lens of <strong>equity and social justice</strong>.
+                    </p>
+                    <div className="flex flex-wrap justify-center gap-3 text-sm mb-10">
+                        <span className="px-4 py-2 rounded-full bg-white/10 border border-white/20"><Icon name="fa-chart-line" className="mr-2"/>Evidence-Based</span>
+                        <span className="px-4 py-2 rounded-full bg-white/10 border border-white/20"><Icon name="fa-scale-balanced" className="mr-2"/>Equity-Focused</span>
+                        <span className="px-4 py-2 rounded-full bg-white/10 border border-white/20"><Icon name="fa-chart-pie" className="mr-2"/>Interactive Charts</span>
+                        <span className="px-4 py-2 rounded-full bg-white/10 border border-white/20"><Icon name="fa-book" className="mr-2"/>29 Cited Sources</span>
+                    </div>
+                    <a href="#summary" className="scroll-cue inline-flex flex-col items-center text-gray-300 hover:text-white transition-colors">
+                        <span className="text-sm mb-1">Explore the data</span><Icon name="fa-arrow-down" className="text-2xl"/>
+                    </a>
+                </div>
+            </header>
+        );
+    }
+
+    /* ============================================================
+       SECTIONS
+       ============================================================ */
+    function ExecutiveSummary(){
+        return (
+            <Reveal id="summary" className="mb-20 scroll-mt-20">
+                <div className="section-card p-8 rounded-2xl border-t-4 border-red-500">
+                    <div className="flex flex-col lg:flex-row gap-8 items-start">
+                        <div className="flex-1">
+                            <h2 className="text-4xl font-bold mb-6"><Icon name="fa-clipboard-list" className="text-red-500 mr-3"/>Executive Summary</h2>
+                            <div className="prose max-w-none muted leading-relaxed space-y-4">
+                                <p>Firearm injury is a leading public-health emergency in the United States. In <strong>2023</strong> — the most recent year with finalized CDC data — there were <strong>46,728</strong> gun-related deaths<Cite n={1}/>. Provisional data for <strong>2024</strong> show a meaningful decline to roughly <strong>44,447</strong> deaths, the first time the annual total fell below 45,000 in five years<Cite n={2}/>.</p>
+                                <p>The two halves of the crisis are diverging. Gun <strong>homicides</strong> fell to about <strong>15,364</strong> in 2024 — down 27% from the 2021 peak of 20,958<Cite n={[2,11]}/>. Gun <strong>suicides</strong>, however, rose to a record <strong>27,593</strong>, now roughly 62% of all firearm deaths<Cite n={2}/>. Firearms remain the leading cause of death for U.S. children and teens<Cite n={19}/>.</p>
+                                <p>The burden is profoundly inequitable. Driven by structural disinvestment and racism, young <strong>Black males (15–34)</strong> — about 2% of the population — account for roughly a third of gun homicides and face a firearm-homicide rate about <strong>24 times</strong> that of their white peers<Cite n={[3,4]}/>.</p>
+                                <p>Prevention works on two fronts: clinical programs such as <strong>Hospital-Based Violence Intervention Programs (HVIPs)</strong>, which reduce reinjury, retaliation, and recidivism<Cite n={5}/>, and structural solutions such as summer-jobs and workforce-development programs<Cite n={6}/>. The core recommendation: mandate <strong>Medicaid reimbursement</strong> for HVIPs to build a sustainable, equitable funding model<Cite n={7}/>.</p>
+                            </div>
+                        </div>
+                        <div className="w-full lg:w-80 shrink-0">
+                            <Photo src={IMG.unity} alt="Hands of people from many backgrounds joined together" ratio="80%"
+                                caption="Community solidarity is central to public-health approaches to violence." />
+                            <p className="credit mt-2 text-center">Photo: Unsplash (royalty-free)</p>
+                        </div>
+                    </div>
+                </div>
+            </Reveal>
+        );
+    }
+
+    function Etiology(){
+        const [tab, setTab] = useState(0);
+        const lvl = SEM_LEVELS[tab];
+        return (
+            <Reveal id="etiology" className="mb-20 scroll-mt-20">
+                <h2 className="text-4xl font-bold mb-8"><Icon name="fa-magnifying-glass" className="text-red-500 mr-3"/>Objective 1: Definition & Root Causes</h2>
+                <p className="mb-8 text-lg muted">Community gun violence is interpersonal firearm violence (primarily assaults) occurring in public spaces between non-family members. It is a predictable outcome of interconnected <strong>structural determinants</strong> that create high-risk environments<Cite n={8}/>.</p>
+
+                <div className="section-card p-8 rounded-2xl mb-8">
+                    <h3 className="text-2xl font-bold mb-6">1.1 Case Definition & Mechanisms</h3>
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div className="tinted bg-blue-50 p-6 rounded-xl">
+                            <h4 className="font-bold text-blue-800 mb-3"><Icon name="fa-file-lines" className="mr-2"/>Case Definition</h4>
+                            <p className="text-sm text-blue-700">Interpersonal firearm violence resulting in fatal or nonfatal injury among non-family members in public or community settings. (Adapted from CDC/NIBRS<Cite n={9}/>)</p>
+                            <p className="text-xs text-blue-700 mt-3"><strong>ICD-10-CM external-cause codes:</strong> X93–X95 (assault by firearm discharge); for comparison, W32–W34 (unintentional discharge), X72–X74 (intentional self-harm), Y22–Y24 (undetermined intent).</p>
+                        </div>
+                        <div className="tinted bg-green-50 p-6 rounded-xl">
+                            <h4 className="font-bold text-green-800 mb-3"><Icon name="fa-gears" className="mr-2"/>Agent / Mechanism</h4>
+                            <p className="text-sm text-green-700">The <strong>firearm</strong> is the agent, but the mechanism is <strong>social and biological</strong>: chronic stress from structural racism and poverty creates pre-clinical trauma (allostatic load), increasing the likelihood of reactive violence.</p>
+                        </div>
+                    </div>
+                    <h3 className="text-2xl font-bold mb-6 mt-8">1.2 Causal Pathway: Structural Drivers</h3>
+                    <div className="causal-diagram mt-6">
+                        <div className="causal-step"><div className="text-red-600 font-bold mb-2">Upstream Driver</div><div>Structural Racism & Disinvestment<Cite n={8}/></div></div>
+                        <div className="causal-arrow">→</div>
+                        <div className="causal-step"><div className="text-orange-600 font-bold mb-2">Intermediate</div><div>Low SES, Poverty & Chronic Stress</div></div>
+                        <div className="causal-arrow">→</div>
+                        <div className="causal-step"><div className="text-yellow-600 font-bold mb-2">Proximate Cause</div><div>Exposure to High-Risk Network / Conflict<Cite n={5}/></div></div>
+                        <div className="causal-arrow">→</div>
+                        <div className="causal-step"><div className="text-red-600 font-bold mb-2">Outcome</div><div>Fatal or Non-Fatal Firearm Injury</div></div>
+                    </div>
+                </div>
+
+                <div className="section-card p-8 rounded-2xl">
+                    <h3 className="text-2xl font-bold mb-2">1.3 Risk Factors Across the Socio-Ecological Model (SEM)</h3>
+                    <p className="text-sm muted mb-6">Interactive: select a level of the Socio-Ecological Model to explore the evidence. <strong>Every level is now individually cited</strong> — risk is produced at all five levels at once, not just within individuals.</p>
+                    <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
+                        <div className="flex flex-wrap -mb-px gap-1">
+                            {SEM_LEVELS.map((l,i)=>(
+                                <button key={l.name} onClick={()=>setTab(i)} className={'tab-button px-4 py-2 rounded-t-lg font-medium '+(i===tab?'active':'')}>
+                                    <Icon name={l.icon} className="mr-2"/>{l.name}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 mb-5">
+                        <span className="level-icon" style={{background:lvl.color}}><Icon name={lvl.icon}/></span>
+                        <div><h4 className="font-bold text-lg">{lvl.name} Level</h4><p className="text-sm muted">{lvl.blurb}</p></div>
+                    </div>
+                    <div>
+                        {lvl.items.map(it=>(
+                            <div key={it.k} className="p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-900/20 rounded-r-lg mb-3">
+                                <h4 className="font-bold text-red-800 dark:text-red-300 mb-1">{it.k}</h4>
+                                <p className="text-sm text-red-700 dark:text-red-200">{it.v}<Cite n={it.c}/></p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </Reveal>
+        );
+    }
+
+    function Burden({dark}){
+        return (
+            <Reveal id="burden" className="mb-20 scroll-mt-20">
+                <h2 className="text-4xl font-bold mb-8"><Icon name="fa-chart-column" className="text-red-500 mr-3"/>Objective 2: Burden & Distribution</h2>
+
+                {/* NEW equity-framed, well-cited context paragraph */}
+                <div className="section-card p-0 rounded-2xl mb-8 overflow-hidden border-l-4 border-red-500">
+                    <div className="grid lg:grid-cols-3">
+                        <div className="lg:col-span-2 p-8">
+                            <h3 className="text-2xl font-bold mb-4"><Icon name="fa-scale-balanced" className="text-red-500 mr-2"/>Contextualizing the Numbers: An Equity Lens</h3>
+                            <div className="muted space-y-4 leading-relaxed">
+                                <p>The figures below are not neutral statistics — they are a map of <strong>who has been protected and who has been abandoned</strong>. Firearm injury is now the leading cause of death for U.S. children and adolescents<Cite n={19}/>, yet that burden falls with brutal unevenness. Young Black men aged 15–34 make up roughly 2% of the population but bear about a third of all gun homicides, dying by firearm at nearly <strong>24 times</strong> the rate of their white peers<Cite n={3}/>.</p>
+                                <p>These gaps are not the product of individual choices but of <strong>structural conditions built over generations</strong>. Historic redlining and residential segregation concentrated poverty, disinvestment, and under-policing-and-over-policing in the same neighborhoods<Cite n={8}/>, and structural racism operates as an upstream determinant of health that patterns exposure to violence<Cite n={4}/>. Contemporary data confirm the result: exposure to deadly gun violence is distributed deeply inequitably by race/ethnicity, poverty, and neighborhood disadvantage<Cite n={24}/>.</p>
+                                <p>Read this way, the encouraging <strong>2024 decline in homicides</strong><Cite n={2}/> and the record in suicides become an equity question, not just a trend line: progress is real, but a just recovery means closing the gap for the communities that have carried the heaviest load the longest.</p>
+                            </div>
+                        </div>
+                        <div className="relative min-h-[220px]">
+                            <Photo src={IMG.unity2} alt="Many hands joined in a circle, symbolizing collective action" ratio="100%" className="h-full"/>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="section-card p-8 rounded-2xl mb-8">
+                    <h3 className="text-2xl font-bold mb-6">2.1 Descriptive Epidemiology: Person, Place, Time</h3>
+                    <div className="grid md:grid-cols-3 gap-6">
+                        <div className="tinted bg-purple-50 p-6 rounded-xl">
+                            <h4 className="font-bold text-purple-800 mb-3"><Icon name="fa-user" className="mr-2"/>Person</h4>
+                            <p className="text-sm text-purple-700">Disproportionately affects young <strong>Black and Hispanic/Latino males (15–34)</strong> and those in the lowest <strong>SES</strong> tiers<Cite n={3}/>.</p>
+                        </div>
+                        <div className="tinted bg-indigo-50 p-6 rounded-xl">
+                            <h4 className="font-bold text-indigo-800 mb-3"><Icon name="fa-location-dot" className="mr-2"/>Place</h4>
+                            <p className="text-sm text-indigo-700">Concentrated in under-resourced <strong>urban</strong> neighborhoods, yet 10 of the 20 highest gun-homicide counties are <strong>rural</strong><Cite n={10}/>.</p>
+                        </div>
+                        <div className="tinted bg-teal-50 p-6 rounded-xl">
+                            <h4 className="font-bold text-teal-800 mb-3"><Icon name="fa-clock" className="mr-2"/>Time</h4>
+                            <p className="text-sm text-teal-700">Gun homicides fell for a third straight year through <strong>2024</strong> (the largest decline in the total gun-death rate since 1995), even as gun suicides set a record<Cite n={2}/>.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="section-card p-8 rounded-2xl mb-8">
+                    <h3 className="text-2xl font-bold mb-6">2.2 Key Burden Indicators</h3>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                        {KPIS.map((k,i)=>(
+                            <div key={i} className="kpi-card p-6 rounded-xl text-center">
+                                <div className="text-3xl font-black text-red-600 mb-2"><CountUp target={k.value} format={k.format} prefix={k.prefix||''} suffix={k.suffix||''}/></div>
+                                <div className="text-sm font-semibold muted">{k.label}<Cite n={k.c}/></div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="section-card p-8 rounded-2xl mb-8">
+                    <h3 className="text-2xl font-bold mb-2">2.3 Six-Year Trend (2019–2024)</h3>
+                    <p className="text-sm muted mb-4">Interactive: toggle series to compare how homicides and suicides have moved in opposite directions. (2024 is provisional.)</p>
+                    <TrendChart dark={dark}/>
+                    <p className="credit mt-4 text-center">Source: CDC WISQARS / NCHS mortality data; 2024 provisional<Cite n={[1,2]}/>.</p>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-8">
+                    <div className="section-card p-8 rounded-2xl"><IntentChart dark={dark}/></div>
+                    <div className="section-card p-8 rounded-2xl">
+                        <h3 className="text-2xl font-bold mb-6">2.5 Core Academic Measures</h3>
+                        <Accordion title={<span><Icon name="fa-chart-line" className="mr-2"/>Epidemiological Measures (click to expand)</span>}>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-gray-100 dark:bg-gray-800"><tr>
+                                        <th className="p-3 text-left font-semibold">Measure</th><th className="p-3 text-left font-semibold">Definition</th><th className="p-3 text-left font-semibold">Estimate</th><th className="p-3 text-left font-semibold">Source</th>
+                                    </tr></thead>
+                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                        <tr><td className="p-3 font-medium">Incidence Rate</td><td className="p-3">New firearm injuries per 100,000 / year</td><td className="p-3 font-semibold text-red-600">~120 / 100,000</td><td className="p-3">CDC WISQARS<Cite n={13}/></td></tr>
+                                        <tr><td className="p-3 font-medium">Prevalence</td><td className="p-3">Living survivors with firearm-injury sequelae</td><td className="p-3 font-semibold text-red-600">~2.8 million</td><td className="p-3">National estimates<Cite n={14}/></td></tr>
+                                        <tr><td className="p-3 font-medium">Mortality Rate</td><td className="p-3">Age-adjusted firearm deaths per 100,000 / year (2023)</td><td className="p-3 font-semibold text-red-600">~13.7 / 100,000</td><td className="p-3">CDC/NCHS<Cite n={1}/></td></tr>
+                                        <tr><td className="p-3 font-medium">Case Fatality Rate</td><td className="p-3">Share of firearm injuries that are fatal</td><td className="p-3 font-semibold text-red-600">~24%</td><td className="p-3">Trauma registry data<Cite n={15}/></td></tr>
+                                        <tr><td className="p-3 font-medium">YPLL</td><td className="p-3">Years of potential life lost before age 65 (2023)</td><td className="p-3 font-semibold text-red-600">~1.1 million / year</td><td className="p-3">Johns Hopkins CGVS<Cite n={3}/></td></tr>
+                                        <tr><td className="p-3 font-medium">DALY Rate</td><td className="p-3">Disability-Adjusted Life Years per 100,000</td><td className="p-3 font-semibold text-red-600">~2,400 / 100,000</td><td className="p-3">Global Burden of Disease<Cite n={16}/></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </Accordion>
+                    </div>
+                </div>
+
+                <div className="section-card p-8 rounded-2xl mt-8">
+                    <h3 className="text-2xl font-bold mb-6">2.6 Homicide-Rate Disparity</h3>
+                    <p className="mb-6 muted">Firearm-homicide rates among males aged 15–34 reveal a stark racial gap, underscoring the need for targeted <strong>equity-focused</strong> interventions.</p>
+                    <DisparityChart dark={dark}/>
+                    <p className="credit mt-4 text-center">Source: Johns Hopkins Center for Gun Violence Solutions analysis of CDC data, 2023<Cite n={3}/>.</p>
+                </div>
+            </Reveal>
+        );
+    }
+
+    function Cycle(){
+        return (
+            <Reveal id="cycle" className="mb-20 scroll-mt-20">
+                <h2 className="text-4xl font-bold mb-8"><Icon name="fa-arrows-rotate" className="text-red-500 mr-3"/>Objective 3: Natural History & Progression</h2>
+                <div className="section-card p-8 rounded-2xl mb-8">
+                    <h3 className="text-2xl font-bold mb-6">3.1 Stages of Disease: From Exposure to Outcome</h3>
+                    <p className="mb-6 text-lg muted">Framed as a natural history, community gun violence progresses through predictable stages — creating distinct windows where prevention can alter the trajectory.</p>
+                    <div className="causal-diagram mt-4">
+                        <div className="causal-step"><div className="text-blue-600 font-bold mb-2">Pre-clinical</div><div>Chronic stress & exposure to high-risk environments (allostatic load)<Cite n={8}/></div></div>
+                        <div className="causal-arrow">→</div>
+                        <div className="causal-step"><div className="text-orange-600 font-bold mb-2">Acute Injury</div><div>Fatal or non-fatal firearm injury (the clinical event)</div></div>
+                        <div className="causal-arrow">→</div>
+                        <div className="causal-step"><div className="text-yellow-600 font-bold mb-2">Recovery & Sequelae</div><div>Physical rehabilitation, PTSD, disability, and survivor trauma<Cite n={14}/></div></div>
+                        <div className="causal-arrow">→</div>
+                        <div className="causal-step"><div className="text-red-600 font-bold mb-2">Recurrence or Resolution</div><div>Reinjury / retaliation, or recovery and de-escalation<Cite n={17}/></div></div>
+                    </div>
+                </div>
+                <div className="section-card p-8 rounded-2xl mb-8">
+                    <div className="grid md:grid-cols-2 gap-8 items-center mb-8">
+                        <div>
+                            <h3 className="text-2xl font-bold mb-4">3.2 Progression & 3.3 Intervention Timing</h3>
+                            <p className="muted">Gun violence follows a predictable pattern of exposure, injury, and potential recurrence. The hospital stay after an injury is a unique <strong>"teachable moment"</strong> — the highest-leverage window to interrupt the cycle<Cite n={5}/>.</p>
+                        </div>
+                        <Photo src={IMG.trauma} alt="A trauma-care team at work in an operating room" ratio="62%"
+                            caption="The acute-injury moment is also the strongest window for intervention." />
+                    </div>
+                    <div className="grid md:grid-cols-2 gap-8">
+                        <div className="tinted bg-red-50 p-6 rounded-xl">
+                            <h4 className="font-bold text-red-800 mb-4"><Icon name="fa-fire" className="mr-2"/>High-Risk Period (progression)</h4>
+                            <p className="text-sm text-red-700 mb-4">The 2-year period after a violent injury carries the <strong>highest risk of reinjury</strong><Cite n={17}/>.</p>
+                            <div className="space-y-2 text-xs text-red-600">
+                                <div>• <span className="font-semibold">0–6 months:</span> ~40% of recurrence risk</div>
+                                <div>• <span className="font-semibold">6–24 months:</span> additional ~35% risk</div>
+                                <div>• <span className="font-semibold">Beyond 2 years:</span> risk plateaus near baseline</div>
+                            </div>
+                        </div>
+                        <div className="tinted bg-blue-50 p-6 rounded-xl">
+                            <h4 className="font-bold text-blue-800 mb-4"><Icon name="fa-shield-halved" className="mr-2"/>Intervention Opportunities</h4>
+                            <p className="text-sm text-blue-700 mb-4">The hospital stay is a unique "<strong>teachable moment</strong>" for intervention<Cite n={5}/>.</p>
+                            <div className="space-y-2 text-xs text-blue-600">
+                                <div>• <span className="font-semibold">Immediate:</span> trauma-informed care</div>
+                                <div>• <span className="font-semibold">24–48 hours:</span> risk assessment & safety planning</div>
+                                <div>• <span className="font-semibold">Discharge:</span> community-resource connection</div>
+                                <div>• <span className="font-semibold">Follow-up:</span> 30–90 day intensive case management</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div className="section-card p-8 rounded-2xl">
+                    <h3 className="text-2xl font-bold mb-6">3.4 Equity Considerations in Progression</h3>
+                    <div className="tinted bg-purple-50 p-6 rounded-xl">
+                        <p className="text-sm text-purple-700 mb-3">Progression is not experienced equally. Populations facing structural disinvestment tend to move through the stages faster and with worse outcomes:</p>
+                        <ul className="text-sm text-purple-700 space-y-1 ml-4 list-disc">
+                            <li>Young Black and Hispanic/Latino males face far higher exposure and reinjury risk, compounding across the cycle<Cite n={3}/>.</li>
+                            <li>Under-resourced trauma systems and "trauma deserts" slow recovery and raise mortality and recurrence risk<Cite n={[26,17]}/>.</li>
+                            <li>Uninsured and underinsured survivors face barriers to the long-term case management that interrupts the cycle<Cite n={7}/>.</li>
+                        </ul>
+                    </div>
+                </div>
+            </Reveal>
+        );
+    }
+
+    function Prevention({dark}){
+        const levels = [
+            {icon:'fa-briefcase-medical', color:'#38A169', bg:'bg-green-50', tx:'text-green-800', tx2:'text-green-700', img:IMG.counsel,
+             title:'Clinical / Individual Level', badges:[['Secondary','#FEEBC8','#7B341E'],['Tertiary','#E9D8FD','#44337A']],
+             cap:'Behavioral-health counseling and case management interrupt the cycle after injury.',
+             items:[<>Hospital-based violence intervention programs — tertiary, after injury<Cite n={5}/></>, <>Trauma-informed behavioral-health services</>, <>Substance-use treatment integration<Cite n={23}/></>, <>Mental-health crisis intervention & screening — secondary</>]},
+            {icon:'fa-city', color:'#DD6B20', bg:'bg-yellow-50', tx:'text-yellow-800', tx2:'text-yellow-700', img:IMG.meeting,
+             title:'Community Level', badges:[['Primary','#C6F6D5','#22543D'],['Secondary','#FEEBC8','#7B341E']],
+             cap:'Community meetings, mentorship, and greening build collective efficacy.',
+             items:[<>Community violence intervention / interruption programs — secondary<Cite n={18}/></>, <>Youth mentorship & workforce development — primary<Cite n={6}/></>, <>Community healing & resilience initiatives</>, <>Neighborhood revitalization & greening — primary<Cite n={[10,27]}/></>]},
+            {icon:'fa-landmark', color:'#805AD5', bg:'bg-purple-50', tx:'text-purple-800', tx2:'text-purple-700', img:IMG.planning,
+             title:'Structural / Policy Level', badges:[['Primary','#C6F6D5','#22543D']],
+             cap:'Sustained funding and policy shape the conditions that produce violence.',
+             items:[<>Medicaid reimbursement for HVIP services<Cite n={7}/></>, <>Federal funding for community violence intervention<Cite n={19}/></>, <>Housing & economic-development policy<Cite n={4}/></>, <>Safe-storage and permit-to-purchase laws<Cite n={[3,25]}/></>]}
+        ];
+        return (
+            <Reveal id="interventions" className="mb-20 scroll-mt-20">
+                <h2 className="text-4xl font-bold mb-8"><Icon name="fa-shield-halved" className="text-red-500 mr-3"/>Objective 4: Prevention & Interventions</h2>
+                <p className="mb-8 text-lg muted">Evidence-based interventions exist at multiple levels, from individual clinical care to community-wide structural change.</p>
+                <div className="section-card p-8 rounded-2xl mb-8">
+                    <h3 className="text-2xl font-bold mb-6">4.1 Intervention Effectiveness</h3>
+                    <div className="grid md:grid-cols-2 gap-8 items-start">
+                        <div className="text-center">
+                            <h4 className="text-lg font-bold mb-4">Hospital-Based Violence Intervention</h4>
+                            <Donut val={55} text="Up to 55% lower re-injury" dark={dark} key="hvip"/>
+                            <p className="text-sm muted mt-4">Reduces reinjury, retaliation & recidivism<Cite n={5}/></p>
+                        </div>
+                        <div className="text-center">
+                            <h4 className="text-lg font-bold mb-4">Summer Youth Employment</h4>
+                            <Donut val={43} text="Up to 43% less violent crime" dark={dark} key="jobs"/>
+                            <p className="text-sm muted mt-4">Up to 43% drop in violent-crime arrests<Cite n={6}/></p>
+                        </div>
+                    </div>
+                    <div className="mt-8 grid md:grid-cols-3 gap-4">
+                        <Photo src={IMG.hospital} alt="Hospital emergency entrance" ratio="66%" caption="Hospital-based intervention meets survivors at the bedside." />
+                        <Photo src={IMG.counsel} alt="A mentor and young person in conversation" ratio="66%" caption="Trauma-informed counseling & mentorship." />
+                        <Photo src={IMG.meeting} alt="Community members meeting around a table" ratio="66%" caption="Community-led violence interruption." />
+                    </div>
+                </div>
+                <div className="section-card p-8 rounded-2xl">
+                    <h3 className="text-2xl font-bold mb-4">4.2 Multi-Level Prevention Framework</h3>
+                    <p className="text-sm muted mb-6">Each socioecological level is tagged with its <strong>prevention tier</strong>: <span className="tier-badge" style={{background:'#C6F6D5',color:'#22543D'}}>Primary</span> (before injury occurs), <span className="tier-badge" style={{background:'#FEEBC8',color:'#7B341E'}}>Secondary</span> (early detection in at-risk people), and <span className="tier-badge" style={{background:'#E9D8FD',color:'#44337A'}}>Tertiary</span> (limiting harm after injury).</p>
+                    <div className="space-y-6">
+                        {levels.map((L,i)=>(
+                            <div key={i} className={'tinted '+L.bg+' p-6 rounded-xl'}>
+                                <div className="flex items-center gap-3 mb-3 flex-wrap">
+                                    <span className="level-icon" style={{background:L.color}}><Icon name={L.icon}/></span>
+                                    <h4 className={'font-bold '+L.tx}>{L.title}</h4>
+                                    {L.badges.map((b,bi)=>(<span key={bi} className="tier-badge" style={{background:b[1],color:b[2]}}>{b[0]}</span>))}
+                                </div>
+                                <ul className={'text-sm '+L.tx2+' space-y-1 ml-4 list-disc'}>
+                                    {L.items.map((it,ii)=>(<li key={ii}>{it}</li>))}
+                                </ul>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </Reveal>
+        );
+    }
+
+    function Policy(){
+        return (
+            <Reveal id="policy" className="mb-20 scroll-mt-20">
+                <h2 className="text-4xl font-bold mb-8"><Icon name="fa-landmark-dome" className="text-red-500 mr-3"/>Objective 5: Policy Solutions</h2>
+                <p className="mb-8 text-lg muted">Effective policy must address immediate needs and long-term structural change. Click each recommendation to expand the evidence.</p>
+                <div className="section-card p-8 rounded-2xl">
+                    <h3 className="text-2xl font-bold mb-6">5.1 Priority Policy Recommendations</h3>
+                    <div className="space-y-4">
+                        <Accordion title={<span><Icon name="fa-hand-holding-dollar" className="mr-2 text-green-600"/>Medicaid Reimbursement for Hospital-Based Violence Intervention</span>} defaultOpen={true}>
+                            <h4 className="font-bold mb-3">Policy Rationale</h4>
+                            <p className="text-sm muted mb-4">Most HVIPs rely on unstable grant funding, limiting scalability<Cite n={7}/>. Medicaid reimbursement would create a reliable funding stream for evidence-based violence-prevention services. As of 2024, a growing number of states have adopted CVI/HVIP Medicaid benefits.</p>
+                            <h4 className="font-bold mb-3">Implementation Strategy</h4>
+                            <ul className="text-sm muted space-y-1 ml-4 list-disc mb-4">
+                                <li>Establish HVIP services as covered Medicaid benefits</li>
+                                <li>Create standardized billing codes for violence-intervention services</li>
+                                <li>Require hospitals to report HVIP outcomes as quality measures</li>
+                                <li>Provide federal matching funds for states implementing HVIPs</li>
+                            </ul>
+                            <h4 className="font-bold mb-3">Expected Impact</h4>
+                            <p className="text-sm muted">Reduced reinjury and recidivism among participants<Cite n={5}/>, with favorable return on investment from avoided medical and justice costs<Cite n={20}/>.</p>
+                        </Accordion>
+                        <Accordion title={<span><Icon name="fa-helmet-safety" className="mr-2 text-yellow-600"/>Federal Infrastructure Investment in High-Violence Communities</span>}>
+                            <h4 className="font-bold mb-3">Policy Rationale</h4>
+                            <p className="text-sm muted mb-4">Structural disinvestment perpetuates cycles of trauma and instability<Cite n={4}/>. Place-based investment — including remediating vacant lots and greening — is a cost-beneficial way to reduce firearm violence<Cite n={[10,27]}/>.</p>
+                            <h4 className="font-bold mb-3">Implementation Strategy</h4>
+                            <ul className="text-sm muted space-y-1 ml-4 list-disc mb-4">
+                                <li>Prioritize infrastructure spending in highest-violence ZIP codes</li>
+                                <li>Pair physical investment with workforce-development programs</li>
+                                <li>Require community engagement in planning</li>
+                                <li>Track violence reduction as a key performance indicator</li>
+                            </ul>
+                        </Accordion>
+                        <Accordion title={<span><Icon name="fa-user-graduate" className="mr-2 text-blue-600"/>Mandatory Violence-Prevention Training for Healthcare Workers</span>}>
+                            <h4 className="font-bold mb-3">Policy Rationale</h4>
+                            <p className="text-sm muted mb-4">Clinicians often lack training in trauma-informed care and violence screening, missing critical intervention opportunities<Cite n={21}/>.</p>
+                            <h4 className="font-bold mb-3">Implementation Strategy</h4>
+                            <ul className="text-sm muted space-y-1 ml-4 list-disc mb-4">
+                                <li>Integrate violence prevention into medical-education curricula</li>
+                                <li>Require continuing education for practicing clinicians</li>
+                                <li>Develop standardized competency assessments</li>
+                                <li>Fund training-program development</li>
+                            </ul>
+                        </Accordion>
+                    </div>
+                </div>
+            </Reveal>
+        );
+    }
+
+    function Reflection(){
+        return (
+            <Reveal id="reflection" className="mb-20 scroll-mt-20">
+                <h2 className="text-4xl font-bold mb-8"><Icon name="fa-lightbulb" className="text-red-500 mr-3"/>Reflection & Future Research</h2>
+                <p className="mb-8 text-lg muted">Stepping back across Objectives 1–5, this section names where the evidence is thinnest and proposes a testable hypothesis to advance the field — modeling the reflective synthesis expected of a complete dashboard.</p>
+                <div className="grid lg:grid-cols-2 gap-8">
+                    <div className="section-card p-8 rounded-2xl">
+                        <h3 className="text-2xl font-bold mb-4">Where the evidence is thinnest</h3>
+                        <ul className="text-sm muted space-y-3 ml-4 list-disc">
+                            <li><strong>Non-fatal injury surveillance</strong> is incomplete — inconsistent hospital reporting understates true incidence and recovery trajectories<Cite n={13}/>.</li>
+                            <li><strong>HVIP effectiveness estimates vary</strong>, and reinjury findings are sometimes mixed across study designs and follow-up lengths<Cite n={[5,20]}/>.</li>
+                            <li><strong>Causal inference is limited</strong> by the observational nature of most risk-factor and neighborhood studies<Cite n={10}/>.</li>
+                            <li><strong>The suicide–homicide divergence</strong> is under-explained: why community homicide is falling while firearm suicide sets records remains an open question<Cite n={2}/>.</li>
+                        </ul>
+                    </div>
+                    <div className="section-card p-8 rounded-2xl border-t-4 border-red-500">
+                        <h3 className="text-2xl font-bold mb-4">A testable hypothesis</h3>
+                        <div className="tinted bg-red-50 p-6 rounded-xl mb-4">
+                            <p className="text-sm text-red-800"><strong>If</strong> states adopt Medicaid reimbursement for Hospital-Based Violence Intervention Programs (versus grant-only funding), <strong>then</strong> 12-month violent-reinjury rates among enrolled patients will decline relative to comparison sites, <strong>because</strong> stable funding sustains the case-management "dose" that interrupts the cycle of violence<Cite n={7}/>.</p>
+                        </div>
+                        <div className="grid sm:grid-cols-2 gap-4 text-sm">
+                            <div className="tinted bg-blue-50 p-4 rounded-xl">
+                                <h4 className="font-bold text-blue-800 mb-2">Why it matters</h4>
+                                <p className="text-blue-700 text-xs">Directly tests the dashboard's top policy recommendation (Obj. 5) and fills the HVIP-effectiveness gap (Obj. 4) with stronger causal evidence.</p>
+                            </div>
+                            <div className="tinted bg-green-50 p-4 rounded-xl">
+                                <h4 className="font-bold text-green-800 mb-2">How to study it</h4>
+                                <p className="text-green-700 text-xs">Quasi-experimental difference-in-differences across adopting vs. non-adopting states; link Medicaid claims to trauma-registry outcomes; measure reinjury, cost offsets, and equity by race/SES.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Reveal>
+        );
+    }
+
+    function Methods(){
+        return (
+            <Reveal id="methods" className="mb-20 scroll-mt-20">
+                <div className="section-card p-8 rounded-2xl">
+                    <h2 className="text-4xl font-bold mb-8"><Icon name="fa-flask" className="text-red-500 mr-3"/>Data Sources & Methods</h2>
+                    <div className="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h3 className="text-xl font-bold mb-4">Primary Data Sources</h3>
+                            <ul className="space-y-3 text-sm muted">
+                                <li className="flex items-start"><span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-semibold mr-3 mt-1">CDC</span><span>WISQARS & NCHS mortality data (2023 final; 2024 provisional)<Cite n={[1,2]}/></span></li>
+                                <li className="flex items-start"><span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold mr-3 mt-1">FBI</span><span>Uniform Crime Reporting (UCR) & NIBRS<Cite n={9}/></span></li>
+                                <li className="flex items-start"><span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-semibold mr-3 mt-1">GBD</span><span>Global Burden of Disease Study for DALYs<Cite n={16}/></span></li>
+                                <li className="flex items-start"><span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-semibold mr-3 mt-1">HCUP</span><span>Healthcare Cost & Utilization Project for hospitalization data<Cite n={15}/></span></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold mb-4">Analytical Methods</h3>
+                            <ul className="space-y-3 text-sm muted">
+                                <li className="flex items-start"><span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-semibold mr-3 mt-1">RATES</span><span>Age-adjusted rates via direct standardization to the 2000 U.S. Census population</span></li>
+                                <li className="flex items-start"><span className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs font-semibold mr-3 mt-1">YPLL</span><span>Years of Potential Life Lost calculated using age 65 as the reference</span></li>
+                                <li className="flex items-start"><span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded text-xs font-semibold mr-3 mt-1">CI</span><span>95% confidence intervals via the Poisson distribution for rare events</span></li>
+                                <li className="flex items-start"><span className="bg-pink-100 text-pink-800 px-2 py-1 rounded text-xs font-semibold mr-3 mt-1">META</span><span>Random-effects meta-analysis for intervention-effectiveness estimates</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div className="mt-8 p-6 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                        <h3 className="text-lg font-bold mb-3"><Icon name="fa-triangle-exclamation" className="text-yellow-500 mr-2"/>Limitations</h3>
+                        <ul className="text-sm muted space-y-2 ml-4 list-disc">
+                            <li>2024 figures are <strong>provisional</strong> and will be revised slightly when finalized.</li>
+                            <li>Non-fatal firearm-injury data may be underreported due to inconsistent hospital reporting.</li>
+                            <li>Economic-cost estimates vary widely by methodology and inclusion of indirect costs.</li>
+                            <li>Intervention studies vary in follow-up length and outcome measures; reinjury findings are sometimes mixed.</li>
+                            <li>Causal inference is limited by observational designs for many risk-factor analyses.</li>
+                        </ul>
+                    </div>
+                </div>
+            </Reveal>
+        );
+    }
+
+    function References(){
+        return (
+            <Reveal id="references" className="mb-16 scroll-mt-20">
+                <div className="section-card p-8 rounded-2xl">
+                    <h2 className="text-4xl font-bold mb-3"><Icon name="fa-book" className="text-red-500 mr-3"/>References</h2>
+                    <p className="text-sm muted mb-8">AMA style, ordered by first appearance. Links open the original sources.</p>
+                    <div className="text-sm muted space-y-4 leading-relaxed">
+                        {REFERENCES.map((r,i)=>(
+                            <div key={i} id={'ref'+(i+1)} className="flex scroll-mt-24">
+                                <span className="font-bold text-red-600 mr-3 min-w-[2rem]">{i+1}.</span>
+                                <span dangerouslySetInnerHTML={{__html:r}}></span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </Reveal>
+        );
+    }
+
+    /* ============================================================
+       SHELL: nav, dark mode, scroll spy
+       ============================================================ */
+    function App(){
+        const [dark, setDark] = useState(()=>{ try{ return localStorage.getItem('cvip-dark')==='1'; }catch(e){ return false; } });
+        const [mobileOpen, setMobileOpen] = useState(false);
+        const [active, setActive] = useState('summary');
+        const [showTop, setShowTop] = useState(false);
+
+        useEffect(()=>{
+            document.documentElement.classList.toggle('dark', dark);
+            try{ localStorage.setItem('cvip-dark', dark?'1':'0'); }catch(e){}
+        },[dark]);
+
+        useEffect(()=>{
+            const bar=document.getElementById('progress-bar');
+            const onScroll=()=>{
+                const top=window.scrollY||document.documentElement.scrollTop;
+                const docH=document.documentElement.scrollHeight-window.innerHeight;
+                if(bar) bar.style.width=(docH>0?(top/docH*100):0)+'%';
+                setShowTop(top>600);
+                let cur='';
+                document.querySelectorAll('section[id]').forEach(s=>{ if(s.getBoundingClientRect().top<=140) cur=s.id; });
+                if(cur) setActive(cur);
+            };
+            window.addEventListener('scroll',onScroll,{passive:true}); onScroll();
+            return ()=>window.removeEventListener('scroll',onScroll);
+        },[]);
+
+        const go=(e,id)=>{ e.preventDefault(); const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth'}); setMobileOpen(false); };
+
+        const NavList = ({useShort}) => (
+            <ul className="space-y-1">
+                {NAV.map(n=>(
+                    <li key={n.id}>
+                        <a href={'#'+n.id} onClick={(e)=>go(e,n.id)} className={'nav-link block p-3 border-l-4 border-transparent '+(active===n.id?'active':'')}>
+                            <Icon name={n.icon} className="mr-2 w-5 text-center"/>{useShort?n.short:n.label}
+                        </a>
+                    </li>
+                ))}
+            </ul>
+        );
+
+        return (
+            <>
+                <Hero/>
+
+                {/* Mobile top bar */}
+                <div className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 py-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-b border-gray-200 dark:border-gray-700">
+                    <span className="font-bold">Dashboard</span>
+                    <div className="flex items-center gap-2">
+                        <button onClick={()=>setDark(d=>!d)} className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-sm">{dark?'☀️':'🌙'}</button>
+                        <button onClick={()=>setMobileOpen(true)} className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-sm">☰ Menu</button>
+                    </div>
+                </div>
+
+                <div className="flex">
+                    <nav className="hidden md:block sticky top-0 h-screen w-72 shrink-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-r border-gray-200 dark:border-gray-700 p-6 shadow-xl overflow-y-auto">
+                        <div className="mb-6 flex items-center justify-between">
+                            <div><h2 className="text-2xl font-bold mb-1">Navigation</h2><p className="text-sm muted">Epidemiology Objectives</p></div>
+                            <button onClick={()=>setDark(d=>!d)} title="Toggle dark mode" className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{dark?'☀️':'🌙'}</button>
+                        </div>
+                        <NavList useShort={false}/>
+                        <div className="mt-8 p-4 rounded-xl bg-gray-50 dark:bg-gray-800 text-xs muted">
+                            <p className="font-semibold mb-1">Data currency</p>
+                            <p>2023 figures are CDC-finalized; 2024 figures are CDC provisional.</p>
+                        </div>
+                    </nav>
+
+                    {mobileOpen && (
+                        <div className="md:hidden fixed inset-0 z-50">
+                            <div className="absolute inset-0 bg-black/50" onClick={()=>setMobileOpen(false)}></div>
+                            <nav className="absolute left-0 top-0 h-full w-72 bg-white dark:bg-gray-900 p-6 shadow-2xl overflow-y-auto">
+                                <div className="flex items-center justify-between mb-6"><h2 className="text-xl font-bold">Navigation</h2><button onClick={()=>setMobileOpen(false)} className="text-2xl">✕</button></div>
+                                <NavList useShort={true}/>
+                            </nav>
+                        </div>
+                    )}
+
+                    <main className="flex-1 p-4 sm:p-8 lg:p-12 min-w-0">
+                        <ExecutiveSummary/>
+                        <Etiology/>
+                        <Burden dark={dark}/>
+                        <Cycle/>
+                        <Prevention dark={dark}/>
+                        <Policy/>
+                        <Reflection/>
+                        <Methods/>
+                        <References/>
+                        <footer className="text-center text-xs muted py-8 border-t border-gray-200 dark:border-gray-700">
+                            <p>Built as an educational public-health dashboard · Built with React · Charts by Chart.js · Icons by Font Awesome · Photography via Unsplash (royalty-free).</p>
+                            <p className="mt-1">Data: CDC (2023 final / 2024 provisional), Johns Hopkins Center for Gun Violence Solutions, Pew Research Center, Everytown Research. Last updated June 2026.</p>
+                        </footer>
+                    </main>
+                </div>
+
+                <button id="backToTop" className={showTop?'show':''} onClick={()=>window.scrollTo({top:0,behavior:'smooth'})} title="Back to top"
+                    style={{width:'48px',height:'48px',borderRadius:'9999px',background:'#E53E3E',color:'#fff',fontSize:'1.25rem',boxShadow:'0 4px 14px rgba(0,0,0,.25)',border:'none'}}>↑</button>
+            </>
+        );
+    }
+
+    const boot=document.getElementById('boot'); if(boot) boot.remove();
+    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+    </script>
+    <script>
+      /* Explicitly transpile the JSX with the CLASSIC runtime (React.createElement),
+         so the compiled output has no ES-module import statements. */
+      (function(){
+        try{
+          var src = document.getElementById('app-src').textContent;
+          var out = Babel.transform(src, {presets:[['react',{runtime:'classic'}]]}).code;
+          var s = document.createElement('script');
+          s.text = out;
+          document.body.appendChild(s);
+        }catch(e){
+          console.error(e);
+          var b = document.getElementById('boot');
+          if(b){ b.innerHTML = '<div style="max-width:640px;text-align:center;padding:24px;line-height:1.6">The dashboard failed to build in this browser.<br><small style="opacity:.8">'+(e && e.message ? e.message : e)+'</small></div>'; }
+        }
+      })();
+    </script>
+</body>
+</html>
